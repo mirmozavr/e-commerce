@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.views.generic import DetailView, View
 
-from .models import Notebook, Smartphone, Category, LatestProducts
+from .models import Notebook, Smartphone, Category, LatestProducts, Customer, Cart
 
 
 class BaseView(View):
@@ -39,3 +39,16 @@ class CategoryDetailView(DetailView):
     context_object_name = 'category'
     template_name = 'category_detail.html'
     slug_url_kwarg = 'slug'
+
+
+class CartView(View):
+    def get(self, request, *args, **kwargs):
+        customer = Customer.objects.get(user=request.user)
+        cart = Cart.objects.get(owner=customer)
+        # cart = 'full cart'
+        categories = Category.objects.get_categories_for_left_sidebar()
+        context = {
+            'cart': cart,
+            'categories': categories
+        }
+        return render(request, 'cart.html', context)
