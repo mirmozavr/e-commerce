@@ -43,7 +43,8 @@ class LatestProductsManager:
         if with_respect_to:
             ct_model = ContentType.objects.filter(model=with_respect_to)
             if ct_model.exists() and with_respect_to in args:
-                return sorted(products, key=lambda x: x.__class__._meta.model_name.startswith(with_respect_to), reverse=True)
+                return sorted(products, key=lambda x: x.__class__._meta.model_name.startswith(with_respect_to),
+                              reverse=True)
         return products  # number of items must be defined here, not upper
 
 
@@ -52,17 +53,16 @@ class LatestProducts:
 
 
 class CategoryManager(models.Manager):
-
     CATEGORY_NAME_COUNT_NAME = {
         'Ноутбуки': 'notebook__count',
         'Смартфоны': 'smartphone__count'
     }
-    
+
     def get_queryset(self):
         return super().get_queryset()
 
     def get_categories_for_left_sidebar(self):
-        models = get_models_for_count('notebook', 'smartphone') # list of all models to count
+        models = get_models_for_count('notebook', 'smartphone')  # list of all models to count
         qs = self.get_queryset().annotate(*models)
         # return [dict(name=c['name'], slug=c['slug'], count=c[self.CATEGORY_NAME_COUNT_NAME[c['name']]]) for c in qs]
         data = [
@@ -91,6 +91,7 @@ class Product(models.Model):
 
     class Meta:
         abstract = True
+
     category = models.ForeignKey(Category, verbose_name='Категория', on_delete=models.CASCADE)
     title = models.CharField(max_length=255, verbose_name='Наименование')
     slug = models.SlugField(unique=True)
@@ -119,7 +120,6 @@ class Product(models.Model):
         # name = '{}.{}'.format(*self.image.name.split('.'))
         # self.image = InMemoryUploadedFile(filestream, 'ImageField', name, 'jpeg/image',sys.getsizeof(filestream), None)
         super().save(*args, **kwargs)
-
 
 
 class Notebook(Product):
@@ -175,21 +175,31 @@ class CartProduct(models.Model):
 
 
 class Cart(models.Model):
-    owner = models.ForeignKey('Customer', verbose_name='Владелец', on_delete=models.CASCADE)
+    owner = models.ForeignKey('Customer', null=True, verbose_name='Владелец', on_delete=models.CASCADE)
     products = models.ManyToManyField(CartProduct, blank=True, related_name='related_cart')
     total_products = models.PositiveIntegerField(default=0)
-    final_price = models.DecimalField(max_digits=9, decimal_places=2, verbose_name='Общая цена')
+    final_price = models.DecimalField(max_digits=9, default=0, decimal_places=2, verbose_name='Общая цена')
     in_order = models.BooleanField(default=False)
     for_anonymous_user = models.BooleanField(default=False)
 
     def __str__(self):
         return str(self.id)
 
+    def save(self, *args, **kwargs):
+        cart_data = self.products.aggregate(models.Sum('final_price'), models.Count('id'))
+        print(cart_data)
+        if cart_data.get('final_price__sum'):
+            self.final_price = cart_data.get('final_price__sum')
+        else:
+            self.final_price = 0
+        self.total_products = cart_data['id__count']
+        super().save(*args, **kwargs)
+
 
 class Customer(models.Model):
     user = models.ForeignKey(User, verbose_name='Пользователь', on_delete=models.CASCADE)
-    phone = models.CharField(max_length=20, verbose_name='Номер телефона')
-    address = models.CharField(max_length=255, verbose_name='Адрес')
+    phone = models.CharField(max_length=20, verbose_name='Номер телефона', null=True, blank=True)
+    address = models.CharField(max_length=255, verbose_name='Адрес', null=True, blank=True)
 
     def __str__(self):
         return f"Покупатель: {self.user.first_name} {self.user.last_name}"
